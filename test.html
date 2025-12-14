@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Canvas Grid Engine</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #eee;
+      }
+      canvas {
+        border: 1px solid black;
+        display: block;
+        margin: auto;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="onte"></canvas>
+
+    <script>
+      const canvas = document.getElementById("onte");
+      const ctx = canvas.getContext("2d");
+
+      var cellSize = 1;
+      const dpr = window.devicePixelRatio || 1;
+
+      const width = window.innerWidth - cellSize * 2;
+      const height = window.innerHeight - cellSize * 2;
+
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      ctx.scale(dpr, dpr);
+
+      const rects = [];
+      const explosions = [];
+
+      const mouse = { x: 0, y: 0 };
+      let green = 255;
+
+      canvas.addEventListener("mousemove", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = e.clientX - rect.left;
+        mouse.y = e.clientY - rect.top;
+
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const gridPos = getGridPos(x, y);
+
+        explosions.push({
+          col: gridPos.col,
+          row: gridPos.row,
+          radius: 0,
+          maxRadius: 6,
+          green: green,
+        });
+
+        green -= 20;
+      });
+
+      canvas.addEventListener("mousedown", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const gridPos = getGridPos(x, y);
+
+        explosions.push({
+          col: gridPos.col,
+          row: gridPos.row,
+          radius: 0,
+          maxRadius: 6,
+          green: green,
+        });
+      });
+
+      function drawGrid(width, height, size) {
+        ctx.beginPath();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 1;
+
+        for (let x = 0; x <= width; x += size) {
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+        }
+
+        for (let y = 0; y <= height; y += size) {
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+        }
+
+        ctx.stroke();
+      }
+
+      function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
+      }
+
+      function getGridPos(x, y) {
+        return {
+          col: Math.floor(x / cellSize),
+          row: Math.floor(y / cellSize),
+        };
+      }
+
+      function drawRects() {
+        for (const r of rects) {
+          ctx.fillStyle = `rgb(0, ${r.color}, 0)`;
+          ctx.fillRect(r.col * cellSize, r.row * cellSize, cellSize, cellSize);
+        }
+      }
+
+      let clearTime = 0;
+      let clearTimeRect = 0;
+      let timerLimit = 1;
+      function clearrects() {
+        clearTimeRect += 1;
+        if (clearTimeRect > timerLimit) {
+          for (let i = rects.length; i > 0; i--) {
+            rects.splice(-i, 1);
+            // rects.pop();
+          }
+
+          clearTimeRect = 0;
+        }
+      }
+
+      function updateExplosions() {
+        for (let i = explosions.length - 1; i >= 0; i--) {
+          const exp = explosions[i];
+          exp.radius++;
+
+          for (
+            let x = -exp.radius;
+            x <= exp.radius;
+            x += Math.floor(Math.random() * 10)
+          ) {
+            for (
+              let y = -exp.radius;
+              y <= exp.radius;
+              y += Math.floor(Math.random() * 10)
+            ) {
+              if (Math.abs(x) + Math.abs(y) === exp.radius) {
+                rects.push({
+                  col: exp.col + x,
+                  row: exp.row + y,
+                  color: exp.green,
+                });
+              }
+            }
+          }
+
+          if (exp.radius >= exp.maxRadius) {
+            clearTime += 1;
+            if (clearTime > 40) {
+              explosions.splice(i, 3);
+              clearTime = 0;
+            }
+          }
+        }
+      }
+
+      const directions = [
+        { x: 1, y: 0 },
+        { x: -1, y: 0 },
+        { x: 0, y: 1 },
+        { x: 0, y: -1 },
+      ];
+
+      let iaTimer = 0;
+      const iaDelay = 200;
+
+      function IA(delta) {
+        iaTimer += delta;
+        if (iaTimer < iaDelay) return;
+        iaTimer = 0;
+
+        if (rects.length === 0) return;
+
+        const last = rects.at(-1);
+        const lastExplosion = explosions[0];
+        const dir = directions[Math.floor(Math.random() * directions.length)];
+
+        rects.push({
+          col: last.col + dir.x,
+          row: last.row + dir.y,
+        });
+
+        if (lastExplosion) {
+          explosions.push({
+            col: last.col - 1,
+            row: last.row - 1,
+            radius: lastExplosion.radius + 2,
+            maxRadius: lastExplosion.maxRadius + 2,
+          });
+        }
+      }
+
+      let lastTime = performance.now();
+
+      function update(time) {
+        const delta = time - lastTime;
+        lastTime = time;
+
+        ctx.clearRect(0, 0, width, height);
+
+        IA(delta);
+        updateExplosions();
+
+        drawRects();
+        clearrects();
+
+        if (green > 0) {
+          green -= 1;
+        } else {
+          green = 255;
+        }
+
+        const g = getGridPos(mouse.x, mouse.y);
+        ctx.fillRect(g.col * cellSize, g.row * cellSize, cellSize, cellSize);
+
+        requestAnimationFrame(update);
+      }
+
+      requestAnimationFrame(update);
+    </script>
+  </body>
+</html>
